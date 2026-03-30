@@ -334,11 +334,11 @@ export default function GymTracker(){
             if(!ds)return;
             const hasIt=allDates.has(ds);
             if(hasIt){update("movements",movements.filter(m=>m.date!==ds));}
-            else{update("movements",[{id:"logged",label:"Movement",emoji:"\u2728",date:ds},...movements]);}
+            else{update("movements",[{id:"logged",label:"Movement",emoji:"✨",date:ds},...movements]);}
           };
 
           return<div style={{position:"fixed",inset:0,background:"rgba(45,41,38,.97)",backdropFilter:"blur(12px)",zIndex:80,overflow:"auto",fontFamily:F}}>
-            <div style={{maxWidth:480,margin:"0 auto",padding:"20px 20px 40px"}}>
+            <div style={{maxWidth:480,margin:"0 auto",padding:"20px 20px 80px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
                 <h2 style={{fontSize:20,fontWeight:700,color:"#fff",margin:0}}>Movement Tracker</h2>
                 <button onClick={()=>{setShowWeekView(false);setCalOffset(0);}} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"8px 14px",color:"#fff",fontFamily:F,fontSize:12,fontWeight:600,cursor:"pointer"}}>Close</button>
@@ -347,7 +347,7 @@ export default function GymTracker(){
                 <p style={{fontSize:48,fontWeight:800,color:streak>0?c.accent:"rgba(255,255,255,.3)",margin:"0 0 4px",lineHeight:1}}>{streak}</p>
                 <p style={{fontSize:14,fontWeight:600,color:streak>0?"#fff":"rgba(255,255,255,.5)",margin:"0 0 8px"}}>day streak</p>
                 <p style={{fontSize:12,color:streak>0?c.accentSoft:"rgba(255,255,255,.3)",margin:0}}>
-                  {streak>=14?"Incredible dedication. You're proving something to yourself \ud83d\udcaa":streak>=7?"You're on fire! Keep this momentum going \ud83d\udd25":streak>=3?"Great consistency, keep showing up! \u2728":streak>0?"You're building something. Stay with it \ud83c\udf31":"Start a new streak today. One day at a time."}
+                  {streak>=14?"Incredible dedication. You're proving something to yourself 💪":streak>=7?"You're on fire! Keep this momentum going 🔥":streak>=3?"Great consistency, keep showing up! ✨":streak>0?"You're building something. Stay with it 🌱":"Start a new streak today. One day at a time."}
                 </p>
               </div>
               <div style={{display:"flex",gap:10,marginBottom:20}}>
@@ -362,9 +362,9 @@ export default function GymTracker(){
               </div>
               <div style={{background:"rgba(255,255,255,.04)",borderRadius:16,padding:"16px",border:"1px solid rgba(255,255,255,.06)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                  <button onClick={()=>setCalOffset(calOffset-1)} style={{background:"rgba(255,255,255,.08)",border:"none",borderRadius:8,padding:"6px 12px",color:"#fff",fontFamily:F,fontSize:14,fontWeight:600,cursor:"pointer"}}>\u2039</button>
+                  <button onClick={()=>setCalOffset(calOffset-1)} style={{background:"rgba(255,255,255,.08)",border:"none",borderRadius:8,padding:"6px 12px",color:"#fff",fontFamily:F,fontSize:14,fontWeight:600,cursor:"pointer"}}>‹</button>
                   <p style={{fontSize:14,fontWeight:700,color:"#fff",margin:0}}>{monthName}</p>
-                  <button onClick={()=>setCalOffset(Math.min(calOffset+1,0))} disabled={isCurrentMonth} style={{background:isCurrentMonth?"rgba(255,255,255,.03)":"rgba(255,255,255,.08)",border:"none",borderRadius:8,padding:"6px 12px",color:isCurrentMonth?"rgba(255,255,255,.15)":"#fff",fontFamily:F,fontSize:14,fontWeight:600,cursor:isCurrentMonth?"default":"pointer"}}>\u203a</button>
+                  <button onClick={()=>setCalOffset(Math.min(calOffset+1,0))} disabled={isCurrentMonth} style={{background:isCurrentMonth?"rgba(255,255,255,.03)":"rgba(255,255,255,.08)",border:"none",borderRadius:8,padding:"6px 12px",color:isCurrentMonth?"rgba(255,255,255,.15)":"#fff",fontFamily:F,fontSize:14,fontWeight:600,cursor:isCurrentMonth?"default":"pointer"}}>›</button>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:8}}>
                   {["M","T","W","T","F","S","S"].map((d,i)=><p key={i} style={{fontSize:9,fontWeight:600,color:"rgba(255,255,255,.3)",margin:0,textAlign:"center"}}>{d}</p>)}
