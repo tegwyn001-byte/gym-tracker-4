@@ -75,6 +75,7 @@ function getWorkout(split,mode) {
   else { const h=ex.filter(e=>e.priority==="high"),m=ex.filter(e=>e.priority==="medium"),l=ex.filter(e=>e.priority==="low"),s=[...h,...m]; if(s.length<6)s.push(...l.slice(0,6-s.length)); return s.slice(0,split==="fullbody"?8:6); }
 }
 function rng(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function localDate(d){const dt=d||new Date();return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;}
 
 // ============================================================
 // STORAGE
@@ -168,13 +169,13 @@ export default function GymTracker(){
   const startWorkout=(s,m)=>{setSplit(s);setMode(m);const w=getWorkout(s,m);setWorkout(w);const t={},co={};w.forEach(e=>{t[e.id]=Array.from({length:e.sets},()=>({weight:"",reps:""}));co[e.id]=false;});setTracking(t);setCompleted(co);setExpandedTip(null);setSessionGoal(rng(GOALS));setNewPBs([]);setShowSummary(false);setWarmupDone({});setShowWarmup(true);setScreen("active");};
   const updateSet=(eid,si,field,val)=>{setTracking(p=>{const u={...p};u[eid]=[...p[eid]];u[eid][si]={...u[eid][si],[field]:val};return u;});};
   const toggleComplete=id=>setCompleted(p=>({...p,[id]:!p[id]}));
-  const finishWorkout=()=>{const d=new Date().toISOString().split("T")[0],sp=[],up={...pbs};workout.forEach(e=>{const sets=tracking[e.id];if(sets)sets.forEach(s=>{const w=parseFloat(s.weight);if(w>0){const cur=up[e.id]||0;if(w>cur){up[e.id]=w;sp.push({name:e.name,weight:w,previous:cur});}}});});update("log",[{date:d,split,mode,exercises:workout.map(e=>({id:e.id,name:e.name,sets:tracking[e.id],completed:completed[e.id]})),...log.length>0?{id:Date.now()}:{id:Date.now()}},...log]);update("pbs",up);setNewPBs(sp);setShowSummary(true);};
+  const finishWorkout=()=>{const d=localDate(),sp=[],up={...pbs};workout.forEach(e=>{const sets=tracking[e.id];if(sets)sets.forEach(s=>{const w=parseFloat(s.weight);if(w>0){const cur=up[e.id]||0;if(w>cur){up[e.id]=w;sp.push({name:e.name,weight:w,previous:cur});}}});});update("log",[{date:d,split,mode,exercises:workout.map(e=>({id:e.id,name:e.name,sets:tracking[e.id],completed:completed[e.id]})),...log.length>0?{id:Date.now()}:{id:Date.now()}},...log]);update("pbs",up);setNewPBs(sp);setShowSummary(true);};
   const deleteSession=(idx)=>{const n=[...log];n.splice(idx,1);update("log",n);setDeleteConfirm(null);};
-  const logRun=()=>{if(!runKm)return;const d=new Date().toISOString().split("T")[0],pace=runKm&&runMin?(parseFloat(runMin)/parseFloat(runKm)).toFixed(2):null;update("runs",[{date:d,km:runKm,minutes:runMin,pace},...runs]);update("movements",[{id:"jog",label:`Run ${runKm}km`,emoji:"🏃‍♀️",date:d},...movements]);setRunKm("");setRunMin("");};
-  const logHike=()=>{if(!hikeForm.name)return;const d=new Date().toISOString().split("T")[0];update("hikes",[{...hikeForm,date:d},...hikes]);update("movements",[{id:"hike",label:hikeForm.name,emoji:"⛰️",date:d},...movements]);setHikeForm({name:"",km:"",highlight:"",improvement:""});};
+  const logRun=()=>{if(!runKm)return;const d=localDate(),pace=runKm&&runMin?(parseFloat(runMin)/parseFloat(runKm)).toFixed(2):null;update("runs",[{date:d,km:runKm,minutes:runMin,pace},...runs]);update("movements",[{id:"jog",label:`Run ${runKm}km`,emoji:"🏃‍♀️",date:d},...movements]);setRunKm("");setRunMin("");};
+  const logHike=()=>{if(!hikeForm.name)return;const d=localDate();update("hikes",[{...hikeForm,date:d},...hikes]);update("movements",[{id:"hike",label:hikeForm.name,emoji:"⛰️",date:d},...movements]);setHikeForm({name:"",km:"",highlight:"",improvement:""});};
   const addWish=()=>{if(!wishForm.trim())return;update("hikeWishlist",[...hikeWishlist,{name:wishForm.trim(),done:false,id:Date.now()}]);setWishForm("");};
   const toggleWish=id=>update("hikeWishlist",hikeWishlist.map(w=>w.id===id?{...w,done:!w.done}:w));
-  const saveJournal=()=>{if(!journalText&&!journalGratitude)return;const d=new Date().toISOString().split("T")[0];update("journal",[{date:d,text:journalText,gratitude:journalGratitude,prompt:rng(JOURNAL_PROMPTS)},...journal]);setJournalText("");setJournalGratitude("");};
+  const saveJournal=()=>{if(!journalText&&!journalGratitude)return;const d=localDate();update("journal",[{date:d,text:journalText,gratitude:journalGratitude,prompt:rng(JOURNAL_PROMPTS)},...journal]);setJournalText("");setJournalGratitude("");};
 
   const completedCount=Object.values(completed).filter(Boolean).length;
   const totalCount=workout.length;
@@ -305,42 +306,96 @@ export default function GymTracker(){
             return<div key={i} style={{textAlign:"center"}}><p style={{fontSize:8,color:isT?c.accent:c.textLight,fontWeight:isT?700:500,margin:"0 0 4px"}}>{day}</p><div style={{width:24,height:24,borderRadius:"50%",background:isA?`linear-gradient(135deg,${c.sunset2},${c.sunset3})`:isT?`${c.sunset1}28`:c.bg,border:isT&&!isA?`2px solid ${c.sunset1}`:"2px solid transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isA&&<SmChk/>}</div></div>;})}</div>
         </div>
 
-        {/* Week view overlay */}
+        {/* Week view overlay - Monthly calendar + streak */}
         {showWeekView&&(()=>{
-          const now2=new Date(),mon2=new Date(now2);mon2.setDate(now2.getDate()-((now2.getDay()+6)%7));mon2.setHours(0,0,0,0);
-          const dayNames=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-          const weekData=dayNames.map((name,i)=>{
-            const dayDate=new Date(mon2);dayDate.setDate(mon2.getDate()+i);
-            const dateStr=dayDate.toISOString().split("T")[0];
-            const dayWorkouts=log.filter(w=>w.date===dateStr);
-            const dayMovements=movements.filter(m=>m.date===dateStr);
-            return{name,date:dayDate,dateStr,workouts:dayWorkouts,movements:dayMovements,hasActivity:dayWorkouts.length>0||dayMovements.length>0};
-          });
-          const sl2={upper:"Upper Body",lower:"Lower Body",core:"Core",fullbody:"Full Body"};
-          return<div style={{position:"fixed",inset:0,background:"rgba(45,41,38,.95)",backdropFilter:"blur(10px)",zIndex:80,overflow:"auto",fontFamily:F}}>
+          const today=new Date();const todayStr=localDate(today);
+          // Get all active dates from workouts and movements
+          const allDates=new Set();
+          log.forEach(w=>allDates.add(w.date));
+          movements.forEach(m=>allDates.add(m.date));
+          // Calculate streak
+          let streak=0;const checkDate=new Date(today);
+          // Check if today has activity, if not start from yesterday
+          if(!allDates.has(todayStr)){checkDate.setDate(checkDate.getDate()-1);}
+          while(true){const ds=localDate(checkDate);if(allDates.has(ds)){streak++;checkDate.setDate(checkDate.getDate()-1);}else break;}
+          // Build calendar for current month
+          const year=today.getFullYear(),month=today.getMonth();
+          const firstDay=new Date(year,month,1);const lastDay=new Date(year,month+1,0);
+          const startPad=(firstDay.getDay()+6)%7; // Monday=0
+          const totalDays=lastDay.getDate();
+          const prevMonth=new Date(year,month,0);
+          const calDays=[];
+          for(let i=startPad-1;i>=0;i--){calDays.push({day:prevMonth.getDate()-i,current:false,date:null});}
+          for(let i=1;i<=totalDays;i++){const d=new Date(year,month,i);const ds=`${year}-${String(month+1).padStart(2,"0")}-${String(i).padStart(2,"0")}`;calDays.push({day:i,current:true,date:ds,active:allDates.has(ds),isToday:ds===todayStr});}
+          const remaining=7-(calDays.length%7);if(remaining<7)for(let i=1;i<=remaining;i++)calDays.push({day:i,current:false,date:null});
+          // Total active days this month
+          const monthActive=[...allDates].filter(d=>d.startsWith(`${year}-${String(month+1).padStart(2,"0")}`)).length;
+          const monthName=today.toLocaleDateString("en-NZ",{month:"long",year:"numeric"});
+          // Previous month stats
+          const prevMonthDate=new Date(year,month-1,1);
+          const prevMonthStr=`${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth()+1).padStart(2,"0")}`;
+          const prevMonthActive=[...allDates].filter(d=>d.startsWith(prevMonthStr)).length;
+          const prevMonthName=prevMonthDate.toLocaleDateString("en-NZ",{month:"long"});
+
+          return<div style={{position:"fixed",inset:0,background:"rgba(45,41,38,.97)",backdropFilter:"blur(12px)",zIndex:80,overflow:"auto",fontFamily:F}}>
             <div style={{maxWidth:480,margin:"0 auto",padding:"20px 20px 40px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-                <h2 style={{fontSize:20,fontWeight:700,color:"#fff",margin:0}}>This Week</h2>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+                <h2 style={{fontSize:20,fontWeight:700,color:"#fff",margin:0}}>Movement Tracker</h2>
                 <button onClick={()=>setShowWeekView(false)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"8px 14px",color:"#fff",fontFamily:F,fontSize:12,fontWeight:600,cursor:"pointer"}}>Close</button>
               </div>
-              {weekData.map((day,i)=>{
-                const isToday=day.dateStr===new Date().toISOString().split("T")[0];
-                return<div key={i} style={{background:isToday?"rgba(196,114,127,.12)":"rgba(255,255,255,.04)",borderRadius:12,padding:"14px 16px",marginBottom:8,border:isToday?`1px solid ${c.accent}40`:"1px solid rgba(255,255,255,.06)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:day.hasActivity?8:0}}>
-                    <div><p style={{fontSize:13,fontWeight:700,color:isToday?c.accent:"#fff",margin:0}}>{day.name}{isToday?" (Today)":""}</p><p style={{fontSize:10,color:"rgba(255,255,255,.4)",margin:"1px 0 0"}}>{day.date.toLocaleDateString("en-NZ",{day:"numeric",month:"short"})}</p></div>
-                    {day.hasActivity?<div style={{width:22,height:22,borderRadius:"50%",background:`linear-gradient(135deg,${c.sunset2},${c.sunset3})`,display:"flex",alignItems:"center",justifyContent:"center"}}><SmChk/></div>
-                    :<p style={{fontSize:10,color:"rgba(255,255,255,.2)",margin:0}}>Rest day</p>}
-                  </div>
-                  {day.workouts.map((w,wi)=>{const ct=w.exercises?.filter(e=>e.completed).length||0;
-                    return<div key={wi} style={{background:"rgba(255,255,255,.04)",borderRadius:8,padding:"8px 10px",marginBottom:4}}>
-                      <p style={{fontSize:12,fontWeight:600,color:"#fff",margin:0}}>{sl2[w.split]||w.split}</p>
-                      <p style={{fontSize:10,color:"rgba(255,255,255,.4)",margin:"2px 0 0"}}>{w.mode==="short"?"Short & Sweet":"Full Send"} · {ct}/{w.exercises?.length||0} exercises</p>
-                      {w.exercises?.filter(e=>e.sets?.some(s=>s.weight)).map((ex,ei)=><p key={ei} style={{fontSize:9,color:"rgba(255,255,255,.3)",margin:"2px 0 0"}}>{ex.name}: {ex.sets.filter(s=>s.weight).map(s=>`${s.weight}kg×${s.reps}`).join(", ")}</p>)}
-                    </div>;})}
-                  {day.movements.map((m,mi)=><div key={mi} style={{background:"rgba(255,255,255,.04)",borderRadius:8,padding:"6px 10px",marginBottom:2}}>
-                    <p style={{fontSize:11,color:"rgba(255,255,255,.6)",margin:0}}>{m.emoji||m.e} {m.label||m.l}</p>
+
+              {/* Streak card */}
+              <div style={{background:streak>0?`linear-gradient(135deg,${c.accent}30,${c.warm}20)`:"rgba(255,255,255,.04)",borderRadius:16,padding:"20px 22px",marginBottom:20,border:`1px solid ${streak>0?c.accent+"40":"rgba(255,255,255,.08)"}`,textAlign:"center"}}>
+                <p style={{fontSize:48,fontWeight:800,color:streak>0?c.accent:"rgba(255,255,255,.3)",margin:"0 0 4px",lineHeight:1}}>{streak}</p>
+                <p style={{fontSize:14,fontWeight:600,color:streak>0?"#fff":"rgba(255,255,255,.5)",margin:"0 0 8px"}}>{streak===1?"day streak":"day streak"}</p>
+                <p style={{fontSize:12,color:streak>0?c.accentSoft:"rgba(255,255,255,.3)",margin:0}}>
+                  {streak>=7?"You're on fire! Keep this momentum going 🔥":streak>=3?"Great consistency, keep showing up! ✨":streak>0?"You're building something. Stay with it 🌱":"Start a new streak today. One day at a time."}
+                </p>
+              </div>
+
+              {/* Month stats */}
+              <div style={{display:"flex",gap:10,marginBottom:20}}>
+                <div style={{flex:1,background:"rgba(255,255,255,.04)",borderRadius:12,padding:"14px 16px",border:"1px solid rgba(255,255,255,.06)",textAlign:"center"}}>
+                  <p style={{fontSize:24,fontWeight:700,color:c.accent,margin:"0 0 2px"}}>{monthActive}</p>
+                  <p style={{fontSize:10,color:"rgba(255,255,255,.4)",margin:0}}>Days this month</p>
+                </div>
+                <div style={{flex:1,background:"rgba(255,255,255,.04)",borderRadius:12,padding:"14px 16px",border:"1px solid rgba(255,255,255,.06)",textAlign:"center"}}>
+                  <p style={{fontSize:24,fontWeight:700,color:c.warm,margin:"0 0 2px"}}>{prevMonthActive}</p>
+                  <p style={{fontSize:10,color:"rgba(255,255,255,.4)",margin:0}}>Days in {prevMonthName}</p>
+                </div>
+                <div style={{flex:1,background:"rgba(255,255,255,.04)",borderRadius:12,padding:"14px 16px",border:"1px solid rgba(255,255,255,.06)",textAlign:"center"}}>
+                  <p style={{fontSize:24,fontWeight:700,color:c.sage,margin:"0 0 2px"}}>{allDates.size}</p>
+                  <p style={{fontSize:10,color:"rgba(255,255,255,.4)",margin:0}}>Total all time</p>
+                </div>
+              </div>
+
+              {/* Calendar */}
+              <div style={{background:"rgba(255,255,255,.04)",borderRadius:16,padding:"16px",marginBottom:20,border:"1px solid rgba(255,255,255,.06)"}}>
+                <p style={{fontSize:14,fontWeight:700,color:"#fff",margin:"0 0 14px",textAlign:"center"}}>{monthName}</p>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:8}}>
+                  {["M","T","W","T","F","S","S"].map((d,i)=><p key={i} style={{fontSize:9,fontWeight:600,color:"rgba(255,255,255,.3)",margin:0,textAlign:"center"}}>{d}</p>)}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+                  {calDays.map((d,i)=><div key={i} style={{aspectRatio:"1",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:d.isToday?700:500,color:!d.current?"rgba(255,255,255,.12)":d.active?"#fff":d.isToday?c.accent:"rgba(255,255,255,.4)",background:d.active?`linear-gradient(135deg,${c.accent},${c.warm})`:d.isToday?`${c.accent}20`:"transparent",border:d.isToday&&!d.active?`1.5px solid ${c.accent}60`:"1.5px solid transparent",transition:"all .2s"}}>
+                    {d.day}
                   </div>)}
-                </div>;})}
+                </div>
+              </div>
+
+              {/* Recent activity list */}
+              <p style={{fontSize:10,fontWeight:600,color:"rgba(255,255,255,.4)",textTransform:"uppercase",letterSpacing:1,margin:"0 0 10px"}}>Recent activity</p>
+              {[...allDates].sort((a,b)=>b.localeCompare(a)).slice(0,14).map((dateStr,i)=>{
+                const dayLog=log.filter(w=>w.date===dateStr);
+                const dayMov=movements.filter(m=>m.date===dateStr);
+                const sl3={upper:"Upper Body",lower:"Lower Body",core:"Core",fullbody:"Full Body"};
+                return<div key={i} style={{background:"rgba(255,255,255,.04)",borderRadius:10,padding:"10px 14px",marginBottom:6,border:"1px solid rgba(255,255,255,.05)"}}>
+                  <p style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.6)",margin:"0 0 4px"}}>{new Date(dateStr+"T12:00:00").toLocaleDateString("en-NZ",{weekday:"short",day:"numeric",month:"short"})}</p>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                    {dayLog.map((w,wi)=><span key={`w${wi}`} style={{fontSize:10,background:`${c.accent}20`,color:c.accentSoft,padding:"2px 8px",borderRadius:8}}>💪 {sl3[w.split]||w.split}</span>)}
+                    {dayMov.map((m,mi)=><span key={`m${mi}`} style={{fontSize:10,background:`${c.sage}15`,color:c.sage,padding:"2px 8px",borderRadius:8}}>{m.emoji} {m.label}</span>)}
+                  </div>
+                </div>;
+              })}
             </div>
           </div>;
         })()}
@@ -359,10 +414,10 @@ export default function GymTracker(){
         <p style={{fontSize:10,fontWeight:600,color:c.textMuted,textTransform:"uppercase",letterSpacing:1,margin:"16px 0 8px"}}>Log other movement</p>
         <div style={{background:c.card,borderRadius:12,border:`1px solid ${c.border}`,padding:"12px 14px",marginBottom:20}}>
           <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-            {OTHER_MOVEMENTS.map(m=>{const today=new Date().toISOString().split("T")[0],done=movements.some(e=>e.id===m.id&&e.date===today);
-              return<button key={m.id} onClick={()=>{const td=new Date().toISOString().split("T")[0];if(done)update("movements",movements.filter(e=>!(e.id===m.id&&e.date===td)));else update("movements",[{id:m.id,label:m.label,emoji:m.emoji,date:td},...movements]);}} style={{display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:14,border:done?`1.5px solid ${c.sage}`:`1.5px solid ${c.border}`,background:done?c.sageLight:"transparent",color:done?c.sage:c.textMuted,fontFamily:F,fontSize:10,fontWeight:600,cursor:"pointer"}}>{m.emoji} {m.label}{done&&" ✓"}</button>;})}
-            {[{id:"hike",label:"Hike",emoji:"⛰️"},{id:"jog",label:"Run/Jog",emoji:"🏃‍♀️"}].map(m=>{const today=new Date().toISOString().split("T")[0],done=movements.some(e=>e.id===m.id&&e.date===today);
-              return<button key={m.id} onClick={()=>{const td=new Date().toISOString().split("T")[0];if(done)update("movements",movements.filter(e=>!(e.id===m.id&&e.date===td)));else update("movements",[{id:m.id,label:m.label,emoji:m.emoji,date:td},...movements]);}} style={{display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:14,border:done?`1.5px solid ${c.sage}`:`1.5px solid ${c.border}`,background:done?c.sageLight:"transparent",color:done?c.sage:c.textMuted,fontFamily:F,fontSize:10,fontWeight:600,cursor:"pointer"}}>{m.emoji} {m.label}{done&&" ✓"}</button>;})}
+            {OTHER_MOVEMENTS.map(m=>{const today=localDate(),done=movements.some(e=>e.id===m.id&&e.date===today);
+              return<button key={m.id} onClick={()=>{const td=localDate();if(done)update("movements",movements.filter(e=>!(e.id===m.id&&e.date===td)));else update("movements",[{id:m.id,label:m.label,emoji:m.emoji,date:td},...movements]);}} style={{display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:14,border:done?`1.5px solid ${c.sage}`:`1.5px solid ${c.border}`,background:done?c.sageLight:"transparent",color:done?c.sage:c.textMuted,fontFamily:F,fontSize:10,fontWeight:600,cursor:"pointer"}}>{m.emoji} {m.label}{done&&" ✓"}</button>;})}
+            {[{id:"hike",label:"Hike",emoji:"⛰️"},{id:"jog",label:"Run/Jog",emoji:"🏃‍♀️"}].map(m=>{const today=localDate(),done=movements.some(e=>e.id===m.id&&e.date===today);
+              return<button key={m.id} onClick={()=>{const td=localDate();if(done)update("movements",movements.filter(e=>!(e.id===m.id&&e.date===td)));else update("movements",[{id:m.id,label:m.label,emoji:m.emoji,date:td},...movements]);}} style={{display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:14,border:done?`1.5px solid ${c.sage}`:`1.5px solid ${c.border}`,background:done?c.sageLight:"transparent",color:done?c.sage:c.textMuted,fontFamily:F,fontSize:10,fontWeight:600,cursor:"pointer"}}>{m.emoji} {m.label}{done&&" ✓"}</button>;})}
           </div>
         </div>
 
