@@ -162,6 +162,7 @@ export default function GymTracker(){
   const[journalGratitude,setJournalGratitude]=useState("");
   const[deleteConfirm,setDeleteConfirm]=useState(null);
   const[showWeekView,setShowWeekView]=useState(false);
+  const[calOffset,setCalOffset]=useState(0); // 0 = current month, -1 = last month, etc
 
   const getLastSession=(eid)=>{for(const s of log){const e=s.exercises?.find(x=>x.id===eid);if(e?.sets){const f=e.sets.filter(x=>x.weight||x.reps);if(f.length>0)return f;}}return null;};
   const getOverloadNudge=(eid,cur)=>{const last=getLastSession(eid);if(!last)return null;const lm=Math.max(...last.map(s=>parseFloat(s.weight)||0)),cm=Math.max(...cur.map(s=>parseFloat(s.weight)||0)),ar=last.reduce((a,s)=>a+(parseInt(s.reps)||0),0)/last.length;if(cm>0&&cm===lm&&ar>=10)return"You hit 10+ reps last time. Try adding 1-2.5kg!";const cnt=log.filter(s=>s.exercises?.some(e=>e.id===eid&&e.sets?.some(st=>parseFloat(st.weight)===lm))).length;if(cnt>=3&&cm<=lm)return`Same weight for ${cnt} sessions. Time to level up!`;return null;};
@@ -306,99 +307,82 @@ export default function GymTracker(){
             return<div key={i} style={{textAlign:"center"}}><p style={{fontSize:8,color:isT?c.accent:c.textLight,fontWeight:isT?700:500,margin:"0 0 4px"}}>{day}</p><div style={{width:24,height:24,borderRadius:"50%",background:isA?`linear-gradient(135deg,${c.sunset2},${c.sunset3})`:isT?`${c.sunset1}28`:c.bg,border:isT&&!isA?`2px solid ${c.sunset1}`:"2px solid transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isA&&<SmChk/>}</div></div>;})}</div>
         </div>
 
-        {/* Week view overlay - Monthly calendar + streak */}
+
+        {/* Movement tracker overlay */}
         {showWeekView&&(()=>{
           const today=new Date();const todayStr=localDate(today);
-          // Get all active dates from workouts and movements
           const allDates=new Set();
           log.forEach(w=>allDates.add(w.date));
           movements.forEach(m=>allDates.add(m.date));
-          // Calculate streak
           let streak=0;const checkDate=new Date(today);
-          // Check if today has activity, if not start from yesterday
           if(!allDates.has(todayStr)){checkDate.setDate(checkDate.getDate()-1);}
           while(true){const ds=localDate(checkDate);if(allDates.has(ds)){streak++;checkDate.setDate(checkDate.getDate()-1);}else break;}
-          // Build calendar for current month
-          const year=today.getFullYear(),month=today.getMonth();
+          const viewDate=new Date(today.getFullYear(),today.getMonth()+calOffset,1);
+          const year=viewDate.getFullYear(),month=viewDate.getMonth();
           const firstDay=new Date(year,month,1);const lastDay=new Date(year,month+1,0);
-          const startPad=(firstDay.getDay()+6)%7; // Monday=0
+          const startPad=(firstDay.getDay()+6)%7;
           const totalDays=lastDay.getDate();
-          const prevMonth=new Date(year,month,0);
+          const prevMonthLast=new Date(year,month,0);
           const calDays=[];
-          for(let i=startPad-1;i>=0;i--){calDays.push({day:prevMonth.getDate()-i,current:false,date:null});}
-          for(let i=1;i<=totalDays;i++){const d=new Date(year,month,i);const ds=`${year}-${String(month+1).padStart(2,"0")}-${String(i).padStart(2,"0")}`;calDays.push({day:i,current:true,date:ds,active:allDates.has(ds),isToday:ds===todayStr});}
+          for(let i=startPad-1;i>=0;i--){calDays.push({day:prevMonthLast.getDate()-i,current:false,date:null});}
+          for(let i=1;i<=totalDays;i++){const ds=`${year}-${String(month+1).padStart(2,"0")}-${String(i).padStart(2,"0")}`;calDays.push({day:i,current:true,date:ds,active:allDates.has(ds),isToday:ds===todayStr,isPast:new Date(year,month,i)<=today});}
           const remaining=7-(calDays.length%7);if(remaining<7)for(let i=1;i<=remaining;i++)calDays.push({day:i,current:false,date:null});
-          // Total active days this month
           const monthActive=[...allDates].filter(d=>d.startsWith(`${year}-${String(month+1).padStart(2,"0")}`)).length;
-          const monthName=today.toLocaleDateString("en-NZ",{month:"long",year:"numeric"});
-          // Previous month stats
-          const prevMonthDate=new Date(year,month-1,1);
-          const prevMonthStr=`${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth()+1).padStart(2,"0")}`;
-          const prevMonthActive=[...allDates].filter(d=>d.startsWith(prevMonthStr)).length;
-          const prevMonthName=prevMonthDate.toLocaleDateString("en-NZ",{month:"long"});
+          const monthName=viewDate.toLocaleDateString("en-NZ",{month:"long",year:"numeric"});
+          const isCurrentMonth=calOffset===0;
+          const toggleDateMovement=(ds)=>{
+            if(!ds)return;
+            const hasIt=allDates.has(ds);
+            if(hasIt){update("movements",movements.filter(m=>m.date!==ds));}
+            else{update("movements",[{id:"logged",label:"Movement",emoji:"\u2728",date:ds},...movements]);}
+          };
 
           return<div style={{position:"fixed",inset:0,background:"rgba(45,41,38,.97)",backdropFilter:"blur(12px)",zIndex:80,overflow:"auto",fontFamily:F}}>
             <div style={{maxWidth:480,margin:"0 auto",padding:"20px 20px 40px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
                 <h2 style={{fontSize:20,fontWeight:700,color:"#fff",margin:0}}>Movement Tracker</h2>
-                <button onClick={()=>setShowWeekView(false)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"8px 14px",color:"#fff",fontFamily:F,fontSize:12,fontWeight:600,cursor:"pointer"}}>Close</button>
+                <button onClick={()=>{setShowWeekView(false);setCalOffset(0);}} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"8px 14px",color:"#fff",fontFamily:F,fontSize:12,fontWeight:600,cursor:"pointer"}}>Close</button>
               </div>
-
-              {/* Streak card */}
               <div style={{background:streak>0?`linear-gradient(135deg,${c.accent}30,${c.warm}20)`:"rgba(255,255,255,.04)",borderRadius:16,padding:"20px 22px",marginBottom:20,border:`1px solid ${streak>0?c.accent+"40":"rgba(255,255,255,.08)"}`,textAlign:"center"}}>
                 <p style={{fontSize:48,fontWeight:800,color:streak>0?c.accent:"rgba(255,255,255,.3)",margin:"0 0 4px",lineHeight:1}}>{streak}</p>
-                <p style={{fontSize:14,fontWeight:600,color:streak>0?"#fff":"rgba(255,255,255,.5)",margin:"0 0 8px"}}>{streak===1?"day streak":"day streak"}</p>
+                <p style={{fontSize:14,fontWeight:600,color:streak>0?"#fff":"rgba(255,255,255,.5)",margin:"0 0 8px"}}>day streak</p>
                 <p style={{fontSize:12,color:streak>0?c.accentSoft:"rgba(255,255,255,.3)",margin:0}}>
-                  {streak>=7?"You're on fire! Keep this momentum going 🔥":streak>=3?"Great consistency, keep showing up! ✨":streak>0?"You're building something. Stay with it 🌱":"Start a new streak today. One day at a time."}
+                  {streak>=14?"Incredible dedication. You're proving something to yourself \ud83d\udcaa":streak>=7?"You're on fire! Keep this momentum going \ud83d\udd25":streak>=3?"Great consistency, keep showing up! \u2728":streak>0?"You're building something. Stay with it \ud83c\udf31":"Start a new streak today. One day at a time."}
                 </p>
               </div>
-
-              {/* Month stats */}
               <div style={{display:"flex",gap:10,marginBottom:20}}>
                 <div style={{flex:1,background:"rgba(255,255,255,.04)",borderRadius:12,padding:"14px 16px",border:"1px solid rgba(255,255,255,.06)",textAlign:"center"}}>
                   <p style={{fontSize:24,fontWeight:700,color:c.accent,margin:"0 0 2px"}}>{monthActive}</p>
-                  <p style={{fontSize:10,color:"rgba(255,255,255,.4)",margin:0}}>Days this month</p>
-                </div>
-                <div style={{flex:1,background:"rgba(255,255,255,.04)",borderRadius:12,padding:"14px 16px",border:"1px solid rgba(255,255,255,.06)",textAlign:"center"}}>
-                  <p style={{fontSize:24,fontWeight:700,color:c.warm,margin:"0 0 2px"}}>{prevMonthActive}</p>
-                  <p style={{fontSize:10,color:"rgba(255,255,255,.4)",margin:0}}>Days in {prevMonthName}</p>
+                  <p style={{fontSize:10,color:"rgba(255,255,255,.4)",margin:0}}>This month</p>
                 </div>
                 <div style={{flex:1,background:"rgba(255,255,255,.04)",borderRadius:12,padding:"14px 16px",border:"1px solid rgba(255,255,255,.06)",textAlign:"center"}}>
                   <p style={{fontSize:24,fontWeight:700,color:c.sage,margin:"0 0 2px"}}>{allDates.size}</p>
-                  <p style={{fontSize:10,color:"rgba(255,255,255,.4)",margin:0}}>Total all time</p>
+                  <p style={{fontSize:10,color:"rgba(255,255,255,.4)",margin:0}}>All time</p>
                 </div>
               </div>
-
-              {/* Calendar */}
-              <div style={{background:"rgba(255,255,255,.04)",borderRadius:16,padding:"16px",marginBottom:20,border:"1px solid rgba(255,255,255,.06)"}}>
-                <p style={{fontSize:14,fontWeight:700,color:"#fff",margin:"0 0 14px",textAlign:"center"}}>{monthName}</p>
+              <div style={{background:"rgba(255,255,255,.04)",borderRadius:16,padding:"16px",border:"1px solid rgba(255,255,255,.06)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                  <button onClick={()=>setCalOffset(calOffset-1)} style={{background:"rgba(255,255,255,.08)",border:"none",borderRadius:8,padding:"6px 12px",color:"#fff",fontFamily:F,fontSize:14,fontWeight:600,cursor:"pointer"}}>\u2039</button>
+                  <p style={{fontSize:14,fontWeight:700,color:"#fff",margin:0}}>{monthName}</p>
+                  <button onClick={()=>setCalOffset(Math.min(calOffset+1,0))} disabled={isCurrentMonth} style={{background:isCurrentMonth?"rgba(255,255,255,.03)":"rgba(255,255,255,.08)",border:"none",borderRadius:8,padding:"6px 12px",color:isCurrentMonth?"rgba(255,255,255,.15)":"#fff",fontFamily:F,fontSize:14,fontWeight:600,cursor:isCurrentMonth?"default":"pointer"}}>\u203a</button>
+                </div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:8}}>
                   {["M","T","W","T","F","S","S"].map((d,i)=><p key={i} style={{fontSize:9,fontWeight:600,color:"rgba(255,255,255,.3)",margin:0,textAlign:"center"}}>{d}</p>)}
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
-                  {calDays.map((d,i)=><div key={i} style={{aspectRatio:"1",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:d.isToday?700:500,color:!d.current?"rgba(255,255,255,.12)":d.active?"#fff":d.isToday?c.accent:"rgba(255,255,255,.4)",background:d.active?`linear-gradient(135deg,${c.accent},${c.warm})`:d.isToday?`${c.accent}20`:"transparent",border:d.isToday&&!d.active?`1.5px solid ${c.accent}60`:"1.5px solid transparent",transition:"all .2s"}}>
-                    {d.day}
-                  </div>)}
+                  {calDays.map((d,i)=>{
+                    const canTap=d.current&&d.isPast;
+                    const hasWorkoutOnly=d.date&&log.some(w=>w.date===d.date)&&!movements.some(m=>m.date===d.date);
+                    return<div key={i} onClick={()=>{if(canTap&&!hasWorkoutOnly)toggleDateMovement(d.date);}} style={{aspectRatio:"1",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:d.isToday?700:500,cursor:canTap?"pointer":"default",color:!d.current?"rgba(255,255,255,.12)":d.active?"#fff":d.isToday?c.accent:"rgba(255,255,255,.4)",background:d.active?`linear-gradient(135deg,${c.accent},${c.warm})`:d.isToday?`${c.accent}20`:"transparent",border:d.isToday&&!d.active?`1.5px solid ${c.accent}60`:"1.5px solid transparent",transition:"all .2s"}}>
+                      {d.day}
+                    </div>;})}
                 </div>
+                <p style={{fontSize:10,color:"rgba(255,255,255,.25)",margin:"12px 0 0",textAlign:"center"}}>Tap a past date to log or unlog movement</p>
               </div>
-
-              {/* Recent activity list */}
-              <p style={{fontSize:10,fontWeight:600,color:"rgba(255,255,255,.4)",textTransform:"uppercase",letterSpacing:1,margin:"0 0 10px"}}>Recent activity</p>
-              {[...allDates].sort((a,b)=>b.localeCompare(a)).slice(0,14).map((dateStr,i)=>{
-                const dayLog=log.filter(w=>w.date===dateStr);
-                const dayMov=movements.filter(m=>m.date===dateStr);
-                const sl3={upper:"Upper Body",lower:"Lower Body",core:"Core",fullbody:"Full Body"};
-                return<div key={i} style={{background:"rgba(255,255,255,.04)",borderRadius:10,padding:"10px 14px",marginBottom:6,border:"1px solid rgba(255,255,255,.05)"}}>
-                  <p style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.6)",margin:"0 0 4px"}}>{new Date(dateStr+"T12:00:00").toLocaleDateString("en-NZ",{weekday:"short",day:"numeric",month:"short"})}</p>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                    {dayLog.map((w,wi)=><span key={`w${wi}`} style={{fontSize:10,background:`${c.accent}20`,color:c.accentSoft,padding:"2px 8px",borderRadius:8}}>💪 {sl3[w.split]||w.split}</span>)}
-                    {dayMov.map((m,mi)=><span key={`m${mi}`} style={{fontSize:10,background:`${c.sage}15`,color:c.sage,padding:"2px 8px",borderRadius:8}}>{m.emoji} {m.label}</span>)}
-                  </div>
-                </div>;
-              })}
             </div>
           </div>;
         })()}
+
 
         {/* Splits */}
         <p style={{fontSize:10,fontWeight:600,color:c.textMuted,textTransform:"uppercase",letterSpacing:1,margin:"0 0 8px"}}>Choose your split</p>
@@ -493,12 +477,27 @@ export default function GymTracker(){
         <input type="number" inputMode="decimal" value={runKm} onChange={e=>setRunKm(e.target.value)} placeholder="5.0" style={{...inp,marginTop:4,marginBottom:12}}/>
         <label style={{fontSize:10,fontWeight:600,color:c.textLight,textTransform:"uppercase",letterSpacing:.5}}>Time (minutes)</label>
         <input type="number" inputMode="numeric" value={runMin} onChange={e=>setRunMin(e.target.value)} placeholder="30" style={{...inp,marginTop:4,marginBottom:12}}/>
-        {runKm&&runMin&&<p style={{fontSize:13,color:c.sage,fontWeight:600,margin:"0 0 8px"}}>Pace: {(parseFloat(runMin)/parseFloat(runKm)).toFixed(2)} min/km</p>}
+        {runKm&&runMin&&(()=>{const pace=parseFloat(runMin)/parseFloat(runKm);const paceStr=pace.toFixed(2);
+          let label="",color=c.textMuted,tip="",emoji="";
+          if(pace>8){label="Easy walk/jog";color=c.textMuted;emoji="🚶‍♀️";tip="Under 8:00 min/km is a comfortable jog pace.";}
+          else if(pace>7){label="Light jog";color=c.warm;emoji="🐢";tip="Getting under 7:00 min/km would move you into a solid jog.";}
+          else if(pace>6){label="Solid jog";color=c.warm;emoji="🏃‍♀️";tip="Nice work! Under 6:00 min/km is considered a good running pace.";}
+          else if(pace>5.5){label="Good running pace";color=c.sage;emoji="⚡";tip="Strong! Under 5:30 would put you in competitive runner territory.";}
+          else if(pace>5){label="Strong runner";color=c.sage;emoji="🔥";tip="Impressive pace. Sub-5:00 is getting into serious runner territory.";}
+          else if(pace>4.5){label="Fast runner";color=c.accent;emoji="🏅";tip="Seriously quick! You're running faster than most recreational runners.";}
+          else{label="Elite pace";color=c.accent;emoji="🚀";tip="You're flying. This is competitive race pace.";}
+          return<div style={{marginBottom:12}}>
+            <p style={{fontSize:14,fontWeight:700,color:c.sage,margin:"0 0 6px"}}>Pace: {paceStr} min/km</p>
+            <div style={{background:`${color}15`,borderRadius:10,padding:"10px 14px",border:`1px solid ${color}25`}}>
+              <p style={{fontSize:13,fontWeight:700,color,margin:"0 0 3px"}}>{emoji} {label}</p>
+              <p style={{fontSize:11,color:c.textMuted,margin:0,lineHeight:1.4}}>{tip}</p>
+            </div>
+          </div>;})()}
         <button onClick={logRun} style={btn}>Log Run 🏃‍♀️</button>
       </div>
       {runs.length>0&&<><p style={{fontSize:10,fontWeight:600,color:c.textMuted,textTransform:"uppercase",letterSpacing:1,margin:"0 0 8px"}}>Run History</p>
         <div style={{background:c.card,borderRadius:11,border:`1px solid ${c.border}`,padding:"2px 0"}}>{runs.slice(0,10).map((r,i)=>
-          <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"9px 14px",borderBottom:i<Math.min(runs.length,10)-1?`1px solid ${c.border}`:"none"}}><div><p style={{fontSize:12,fontWeight:600,color:c.text,margin:0}}>{r.km}km</p><p style={{fontSize:10,color:c.textMuted,margin:"1px 0 0"}}>{new Date(r.date).toLocaleDateString("en-NZ",{day:"numeric",month:"short"})}</p></div><div style={{textAlign:"right"}}>{r.pace&&<p style={{fontSize:12,fontWeight:600,color:c.sage,margin:0}}>{r.pace} min/km</p>}{r.minutes&&<p style={{fontSize:10,color:c.textMuted,margin:"1px 0 0"}}>{r.minutes} min</p>}</div></div>
+          <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"9px 14px",borderBottom:i<Math.min(runs.length,10)-1?`1px solid ${c.border}`:"none"}}><div><p style={{fontSize:12,fontWeight:600,color:c.text,margin:0}}>{r.km}km</p><p style={{fontSize:10,color:c.textMuted,margin:"1px 0 0"}}>{new Date(r.date).toLocaleDateString("en-NZ",{day:"numeric",month:"short"})}</p></div><div style={{textAlign:"right"}}>{r.pace&&<p style={{fontSize:12,fontWeight:600,color:c.sage,margin:0}}>{r.pace} min/km</p>}{r.pace&&<p style={{fontSize:9,color:c.textLight,margin:"1px 0 0"}}>{parseFloat(r.pace)>8?"Walk/jog":parseFloat(r.pace)>7?"Light jog":parseFloat(r.pace)>6?"Solid jog":parseFloat(r.pace)>5.5?"Good pace":parseFloat(r.pace)>5?"Strong":"Fast!"}</p>}{r.minutes&&<p style={{fontSize:9,color:c.textMuted,margin:"1px 0 0"}}>{r.minutes} min</p>}</div></div>
         )}</div></>}
     </div><TabBar/></div>);
   }
